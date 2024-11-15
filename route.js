@@ -43,6 +43,16 @@ function isUserOrAdmin(req, res, next) {
   }
 }
 
+app.get("/getProduits",isUserOrAdmin, (req, res) => {
+  const sql = "SELECT * FROM produits";
+  dataBase.query(sql, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: "ERREUR DU SERVEUR" });
+    } else {
+      return res.status(200).json(result);
+    }
+  });
+});
 
 app.get("/produits",isUserOrAdmin, (req, res) => {
   const sql = `
