@@ -258,7 +258,7 @@ function verifyToken(req, res, next) {
   const token = req.headers["authorization"];
 
   if (!token) {
-    return res.status(403).json({ message: "Token manquant. Accès interdit." });
+    return res.status(403).json({ message: " Accès interdit. Vous devez être admin." });
   }
 
 
