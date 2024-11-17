@@ -2,7 +2,9 @@ const express = require("express");
 const mysql = require("mysql");
 const app = express();
 const expressPort = 3000;
+const cors = require('cors');
 
+app.use(cors());
 app.use(express.json());
 
 const dataBase = mysql.createConnection({
@@ -70,24 +72,17 @@ app.get("/produits",isUserOrAdmin, (req, res) => {
   });
 });
 
-app.post("/createProduits",verifyToken,isAdmin, (req, res) => {
+app.post("/createProduits", verifyToken, isAdmin, (req, res) => {
   const { nom, prix, description, categorie_id } = req.body;
-  const sql = `INSERT INTO produits (nom, prix, description) VALUES (?, ?, ?);`;
+  const sql = `INSERT INTO produits (nom, prix, description) VALUES (?, ?, ?)`;
   dataBase.query(sql, [nom, prix, description], (err, result) => {
-    if (err) {
-      return res.status(500).json({ error: "ERREUR DU SERVEUR" });
-    }
+    if (err) return res.status(500).json({ error: "Erreur lors de l'insertion du produit" });
+    
     const produits_id = result.insertId;
-    const sqlget = `INSERT INTO produits_categorie (produits_id, categorie_id) VALUES (?, ?);`;
-    dataBase.query(sqlget, [produits_id, categorie_id], (err, result) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "ERREUR DU SERVEUR" });
-      } else {
-        return res.status(200).json({
-          message: "C'est ok chef!",
-        });
-      }
+    const sqlAssoc = `INSERT INTO produits_categorie (produits_id, categorie_id) VALUES (?, ?)`;
+    dataBase.query(sqlAssoc, [produits_id, categorie_id], (err) => {
+      if (err) return res.status(500).json({ error: "Erreur lors de l'insertion de la catégorie" });
+      res.status(200).json({ message: "Produit créé avec succès !" });
     });
   });
 });
@@ -223,62 +218,50 @@ const jwt = require("jsonwebtoken");
 
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password) {
     return res.status(400).json({ message: "Veuillez remplir tous les champs" });
   }
 
-  dataBase.query(
-    "SELECT * FROM utilisateurs WHERE mail = ?",
-    [email],
-    (err, results) => {
-      if (err) {
-        console.error("Erreur de base de données : ", err);
-        return res.status(500).json({ message: "Erreur de base de données" });
-      }
-
-      if (results.length === 0) {
-        return res.status(401).json({ message: "Email ou mot de passe incorrect" });
-      }
-
-      const user = results[0]; 
-
-
-      if (user.mdp !== password) {
-        return res.status(401).json({ message: "Email ou mot de passe incorrect" });
-      }
-
-      if (user.role === "admin") {
-        const token = jwt.sign({ id: user.id, role: user.role }, "votre_clé_secrète", { expiresIn: "1h" });
-        return res.status(200).json({
-          message: `Bienvenue, ${user.nom} ${user.prenom}! Connexion réussie.`,
-          token: token, 
-        });
-      }
-
-      return res.status(200).json({
-        message: `Bienvenue, ${user.nom} ${user.prenom}! Connexion réussie.`,
-      });
+  dataBase.query("SELECT * FROM utilisateurs WHERE mail = ?", [email], (err, results) => {
+    if (err) return res.status(500).json({ message: "Erreur de base de données" });
+    if (results.length === 0 || results[0].mdp !== password) {
+      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
     }
-  );
+
+    const user = results[0];
+    const token = jwt.sign({ id: user.id, role: user.role }, "votre_clé_secrète", { expiresIn: "1h" });
+    return res.status(200).json({
+      message: `Bienvenue, ${user.nom} ${user.prenom}! Connexion réussie.`,
+      token,
+      role: user.role,
+    });
+  });
 });
+
 
 
 function verifyToken(req, res, next) {
   const token = req.headers["authorization"];
-
   if (!token) {
-    return res.status(403).json({ message: " Accès interdit. Vous devez être admin." });
+    return res.status(403).json({ message: "Accès interdit. Token manquant." });
   }
 
-
   const tokenWithoutBearer = token.startsWith("Bearer ") ? token.slice(7) : token;
-
   jwt.verify(tokenWithoutBearer, "votre_clé_secrète", (err, decoded) => {
     if (err) {
       return res.status(403).json({ message: "Token invalide. Accès interdit." });
     }
-    req.user = decoded; 
-    next(); 
+    req.user = decoded;
+    next();
   });
 }
+app.get("/api/products", isUserOrAdmin, (req, res) => {
+  const sql = "SELECT * FROM produits";
+  dataBase.query(sql, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: "Erreur du serveur" });
+    } else {
+      return res.status(200).json(result);
+    }
+  });
+});
